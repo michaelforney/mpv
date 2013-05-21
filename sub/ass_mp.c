@@ -260,7 +260,8 @@ void mp_ass_configure(ASS_Renderer *priv, struct MPOpts *opts,
     ass_set_line_spacing(priv, set_line_spacing);
 }
 
-void mp_ass_configure_fonts(ASS_Renderer *priv, struct osd_style_opts *opts)
+void mp_ass_configure_fonts(ASS_Renderer *priv, struct MPOpts *opts,
+                            struct osd_style_opts *font_opts)
 {
     char *default_font = mp_find_user_config_file("subfont.ttf");
     char *config       = mp_find_config_file("fonts.conf");
@@ -271,7 +272,8 @@ void mp_ass_configure_fonts(ASS_Renderer *priv, struct osd_style_opts *opts)
     }
 
     mp_msg(MSGT_ASS, MSGL_V, "[ass] Setting up fonts...\n");
-    ass_set_fonts(priv, default_font, opts->font, 1, config, 1);
+    ass_set_fonts(priv, default_font, font_opts->font, 1, config,
+                  opts->fontconfig_scan);
     mp_msg(MSGT_ASS, MSGL_V, "[ass] Done.\n");
 
     talloc_free(default_font);

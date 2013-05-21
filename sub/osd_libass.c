@@ -48,7 +48,7 @@ void osd_init_backend(struct osd_state *osd)
                  sizeof(osd_font_pfb) - 1);
 
     osd->osd_render = ass_renderer_init(osd->osd_ass_library);
-    mp_ass_configure_fonts(osd->osd_render, osd->opts->osd_style);
+    mp_ass_configure_fonts(osd->osd_render, osd->opts, osd->opts->osd_style);
     ass_set_aspect_ratio(osd->osd_render, 1.0, 1.0);
 }
 

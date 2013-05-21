@@ -182,6 +182,7 @@ typedef struct MPOpts {
     float sub_gauss;
     int sub_gray;
     int ass_enabled;
+    int fontconfig_scan;
     float ass_line_spacing;
     int ass_use_margins;
     int ass_vsfilter_aspect_compat;

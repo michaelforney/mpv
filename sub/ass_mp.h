@@ -55,7 +55,8 @@ ASS_Track *mp_ass_read_stream(ASS_Library *library, const char *fname,
 struct MPOpts;
 void mp_ass_configure(ASS_Renderer *priv, struct MPOpts *opts,
                       struct mp_osd_res *dim);
-void mp_ass_configure_fonts(ASS_Renderer *priv, struct osd_style_opts *opts);
+void mp_ass_configure_fonts(ASS_Renderer *priv, struct MPOpts *opts,
+                            struct osd_style_opts *font_opts);
 ASS_Library *mp_ass_init(struct MPOpts *opts);
 
 struct sub_bitmap;

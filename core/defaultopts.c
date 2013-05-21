@@ -83,6 +83,7 @@ void set_default_mplayer_options(struct MPOpts *opts)
         .osd_bar_visible = 1,
 #ifdef CONFIG_ASS
         .ass_enabled = 1,
+        .fontconfig_scan = 1,
 #endif
         .sub_scale = 1,
         .ass_vsfilter_aspect_compat = 1,
