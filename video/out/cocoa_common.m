@@ -863,28 +863,33 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
 
 - (NSPoint) mouseLocation
 {
-    struct vo_cocoa_state *s = self.videoOutput->cocoa;
     NSPoint mLoc = [NSEvent mouseLocation];
-    // Always use the "windowed" `s->window` to do hit detection since using
-    // self.window which points to and instance of NSFullScreenWindow while in
-    // fullscreen results in the cursor being reported to be *inside* the view
-    // even when accessing MenuBar and Dock. This results in the mouse behing
-    // autohidden upon inactivity on those case which is terrible, terrible UX.
-    NSPoint wLoc = [s->window convertScreenToBase:mLoc];
+    NSPoint wLoc = [self.window convertScreenToBase:mLoc];
     return [self convertPoint:wLoc fromView:nil];
 }
 
 - (BOOL)containsCurrentMouseLocation
 {
-    return CGRectContainsPoint([self bounds], [self mouseLocation]);
+    NSRect vF   = [[self.window screen] visibleFrame];
+    NSRect vFR  = [self.window convertRectFromScreen:vF];
+    NSRect vFRV = [self convertRect:vFR fromView:nil];
+
+    // clip bounds to current visibleFrame
+    NSRect clippedBounds = CGRectIntersection([self bounds], vFRV);
+    // NSLog(@"%@", NSStringFromRect(clippedBounds));
+    // NSLog(@"%@", NSStringFromPoint([self mouseLocation]));
+    return CGRectContainsPoint(clippedBounds, [self mouseLocation]);
 }
 
 - (void)signalMouseMovement:(NSEvent *)event
 {
     if ([self containsCurrentMouseLocation]) {
+        //NSLog(@"YES");
         NSPoint loc = [self mouseLocation];
         loc.y = - loc.y + [self bounds].size.height;
         vo_mouse_movement(self.videoOutput, loc.x, loc.y);
+    } else {
+        //NSLog(@"NO");
     }
 }
 
