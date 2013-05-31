@@ -231,6 +231,19 @@ static const char *osd_shaders[SUBBITMAP_COUNT] = {
     [SUBBITMAP_RGBA] =   "frag_osd_rgba",
 };
 
+enum {
+    MP_CHR_TOP = 1,
+    MP_CHR_BOTTOM = 2,
+    MP_CHR_LEFT = 4,
+    MP_CHR_RIGHT = 8,
+
+    MP_CHR_CENTER = MP_CHR_TOP | MP_CHR_BOTTOM | MP_CHR_LEFT | MP_CHR_RIGHT,
+};
+
+// this is so that the value 0 (unknown) maps to centered chroma as well
+#define MP_CHR_DIR_X(v) (!!((v) & MP_CHR_RIGHT) - !!((v) & MP_CHR_LEFT))
+#define MP_CHR_DIR_Y(v) (!!((v) & MP_CHR_BOTTOM) - !!((v) & MP_CHR_TOP))
+
 static const struct gl_video_opts gl_video_opts_def = {
     .npot = 1,
     .dither_depth = -1,
@@ -239,6 +252,7 @@ static const struct gl_video_opts gl_video_opts_def = {
     .scale_sep = 1,
     .scalers = { "bilinear", "bilinear" },
     .scaler_params = {NAN, NAN},
+    .chroma_location = MP_CHR_CENTER,
 };
 
 
@@ -279,6 +293,10 @@ const struct m_sub_options gl_video_conf = {
                    ({"fruit", 0}, {"ordered", 1}, {"no", -1})),
         OPT_INTRANGE("dither-size-fruit", dither_size, 0, 2, 8),
         OPT_FLAG("temporal-dither", temporal_dither, 0),
+        OPT_CHOICE("chroma-location", chroma_location, 0,
+                   ({"left", MP_CHR_LEFT},
+                    {"center", MP_CHR_CENTER},
+                    {"top-left", MP_CHR_LEFT | MP_CHR_TOP})),
         OPT_FLAG("alpha", enable_alpha, 0),
         {0}
     },
@@ -506,6 +524,23 @@ static void update_uniforms(struct gl_video *p, GLuint program)
         gl->Uniform1i(gl->GetUniformLocation(program, textures_n), n);
         gl->Uniform2f(gl->GetUniformLocation(program, textures_size_n),
                       p->image.planes[n].w, p->image.planes[n].h);
+    }
+
+    loc = gl->GetUniformLocation(program, "chroma_center_offset");
+    if (loc >= 0) {
+        int chr = p->opts.chroma_location;
+        // By default texture coordinates are such that chroma is centered with
+        // any chroma subsampling. If a specific direction is given, make it
+        // so that the luma and chroma sample line up exactly.
+        // For 4:4:4, setting chroma location should have no effect at all.
+        // luma sample size (in chroma coord. space)
+        float ls_w = 1.0 / (1 << p->image_desc.chroma_xs);
+        float ls_h = 1.0 / (1 << p->image_desc.chroma_ys);
+        // move chroma center to luma center (in chroma coord. space)
+        float o_x = ls_w < 1 ? ls_w * -MP_CHR_DIR_X(chr) / 2 : 0;
+        float o_y = ls_h < 1 ? ls_h * -MP_CHR_DIR_Y(chr) / 2 : 0;
+        gl->Uniform2f(loc, o_x / FFMAX(p->image.planes[1].w, 1),
+                           o_y / FFMAX(p->image.planes[1].h, 1));
     }
 
     gl->Uniform2f(gl->GetUniformLocation(program, "dither_size"),
@@ -1158,6 +1193,7 @@ static void init_video(struct gl_video *p)
                        plane->gl_format, plane->gl_type, NULL);
 
         default_tex_params(gl, GL_TEXTURE_2D, GL_LINEAR);
+        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
     gl->ActiveTexture(GL_TEXTURE0);
 
