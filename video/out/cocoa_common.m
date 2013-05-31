@@ -708,7 +708,8 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     // Do common work such as setting mouse visibility and actually setting
     // the new fullscreen state
     if (!opts->fs) {
-        vo_cocoa_set_cursor_visibility(false);
+        if ([s->view containsCurrentMouseLocation])
+            vo_cocoa_set_cursor_visibility(false);
         opts->fs = VO_TRUE;
     } else {
         vo_cocoa_set_cursor_visibility(true);
