@@ -568,6 +568,10 @@ const m_option_t mp_opts[] = {
     OPT_FLAG_STORE("no-colorkey", vo.colorkey, 0, 0x1000000),
     OPT_FLAG("native-keyrepeat", vo.native_keyrepeat, 0),
     OPT_FLOATRANGE("panscan", vo.panscan, 0, 0.0, 1.0),
+    //OPT_FLOATRANGE("video-scale", vo.scale, 0, 0.1, 20.0),
+    OPT_FLOATRANGE("video-scale", vo.scale, 0, -20.0, 20.0),
+    OPT_FLOATRANGE("video-pan-x", vo.pan_x, 0, -3.0, 3.0),
+    OPT_FLOATRANGE("video-pan-y", vo.pan_y, 0, -3.0, 3.0),
     OPT_FLAG("force-rgba-osd-rendering", force_rgba_osd, 0),
     OPT_CHOICE("colormatrix", requested_colorspace, 0,
                ({"auto", MP_CSP_AUTO},
@@ -745,6 +749,7 @@ const struct MPOpts mp_default_opts = {
         .enable_mouse_movements = 1,
         .fsmode = 0,
         .panscan = 0.0f,
+        .scale = 0.0f,
         .keepaspect = 1,
         .border = 1,
         .colorkey = 0x0000ff00, // default colorkey is green

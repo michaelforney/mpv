@@ -1152,9 +1152,9 @@ static int mp_property_colormatrix_output_range(m_option_t *prop, int action,
                                   prop, action, arg, mpctx);
 }
 
-/// Panscan (RW)
-static int mp_property_panscan(m_option_t *prop, int action, void *arg,
-                               MPContext *mpctx)
+// Update options which are managed through VOCTRL_GET/SET_PANSCAN.
+static int panscan_property_helper(m_option_t *prop, int action, void *arg,
+                                   MPContext *mpctx)
 {
 
     if (!mpctx->video_out
@@ -1584,7 +1584,10 @@ static const m_option_t mp_properties[] = {
                     .offset = offsetof(struct MPOpts, gamma_saturation)),
     M_OPTION_PROPERTY_CUSTOM_("hue", mp_property_gamma,
                     .offset = offsetof(struct MPOpts, gamma_hue)),
-    M_OPTION_PROPERTY_CUSTOM("panscan", mp_property_panscan),
+    M_OPTION_PROPERTY_CUSTOM("panscan", panscan_property_helper),
+    M_OPTION_PROPERTY_CUSTOM("video-scale", panscan_property_helper),
+    M_OPTION_PROPERTY_CUSTOM("video-pan-x", panscan_property_helper),
+    M_OPTION_PROPERTY_CUSTOM("video-pan-y", panscan_property_helper),
     { "video-format", mp_property_video_format, CONF_TYPE_STRING,
       0, 0, 0, NULL },
     { "video-codec", mp_property_video_codec, CONF_TYPE_STRING,

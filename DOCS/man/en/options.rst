@@ -2357,6 +2357,27 @@
 --vid=<ID|auto|no>
     Select video channel. ``auto`` selects the default, ``no`` disables video.
 
+--video-pan-x=<value>, --video-pan-y=<value>
+    Moves the displayed video rectangle by the given value in the X or Y
+    direction. The unit is in fractions of the size of the scaled video (the
+    full size, even if parts of the video are not visible due to panscan or
+    other options).
+
+    For example, displaying a 1280x720 video fullscreen on a 1680x1050 screen
+    with ``--video-pan-x=-0.1`` would move the video 168 pixels to the left
+    (making 128 pixels of the source video invisible).
+
+    This option is disabled if the ``--no-keepaspect`` option is used.
+
+--video-scale=<value>
+    Adjust the video display scale factor by the given value. The unit is in
+    fractions of original video size.
+
+    For example, given a 1280x720 video, ``--video-scale=-0.1`` would make the
+    video by 128 pixels smaller in X direction, and 72 pixels in Y direction.
+
+    This option is disabled if the ``--no-keepaspect`` option is used.
+
 --vo=<driver1[:suboption1[=value]:...],driver2,...[,]>
     Specify a priority list of video output drivers to be used. For
     interactive use you'd normally specify a single one to use, but in

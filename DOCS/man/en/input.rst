@@ -377,6 +377,9 @@ height                        video height
 fps                           container FPS (may contain bogus values)
 dwidth                        video width (after filters and aspect scaling)
 dheight                       video height
+video-pan-x                 x see ``--video-pan-x``
+video-pan-y                 x see ``--video-pan-y``
+video-scale                 x see ``--video-scale``
 aspect                      x video aspect
 vid                         x current video track (similar to ``--vid``)
 video                       x alias for ``vid``
