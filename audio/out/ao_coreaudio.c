@@ -64,6 +64,44 @@ static void print_buffer(struct mp_ring *buffer)
     talloc_free(tctx);
 }
 
+static bool check_ca_st(int level, OSStatus code, const char *message)
+{
+    if (code == noErr) return true;
+
+    // Extract FourCC letters from the uint32_t and finde out if it's a valid
+    // code that is made of letters.
+    char fcc[4] = {
+        (code >> 24) & 0xFF,
+        (code >> 16) & 0xFF,
+        (code >> 8)  & 0xFF,
+        code         & 0xFF,
+    };
+
+    bool valid_fourcc = true;
+    for (int i = 0; i < 4; i++)
+        if (!isprint(fcc[i]))
+            valid_fourcc = false;
+
+    char *error_string;
+    if (valid_fourcc)
+        error_string =
+            talloc_asprintf(NULL, "'%c%c%c%c'", fcc[0], fcc[1], fcc[2], fcc[3]);
+    else
+        error_string = talloc_asprintf(NULL, "%d", code);
+
+    ca_msg(level, "%s (%s)\n", message, error_string);
+
+    talloc_free(error_string);
+
+    return false;
+}
+
+#define CHECK_CA_ERROR(message) \
+    do { \
+        if (!check_ca_st(MSGL_ERR, err, message)) { \
+            goto coreaudio_error; \
+        } \
+    } while (0)
 
 struct priv
 {
@@ -131,18 +169,13 @@ static int control(struct ao *ao, enum aocontrol cmd, void *arg)
             };
             return CONTROL_TRUE;
         }
+
         err = AudioUnitGetParameter(p->theOutputUnit, kHALOutputParam_Volume,
                                     kAudioUnitScope_Global, 0, &vol);
 
-        if (err == 0) {
-            // printf("GET VOL=%f\n", vol);
-            control_vol->left = control_vol->right = vol * 100.0 / 4.0;
-            return CONTROL_TRUE;
-        } else {
-            ca_msg(MSGL_WARN,
-                   "could not get HAL output volume: [%4.4s]\n", (char *)&err);
-            return CONTROL_FALSE;
-        }
+        CHECK_CA_ERROR("could not get HAL output volume");
+        control_vol->left = control_vol->right = vol * 100.0 / 4.0;
+        return CONTROL_TRUE;
 
     case AOCONTROL_SET_VOLUME:
         control_vol = (ao_control_vol_t *)arg;
@@ -165,19 +198,15 @@ static int control(struct ao *ao, enum aocontrol cmd, void *arg)
         vol = (control_vol->left + control_vol->right) * 4.0 / 200.0;
         err = AudioUnitSetParameter(p->theOutputUnit, kHALOutputParam_Volume,
                                     kAudioUnitScope_Global, 0, vol, 0);
-        if (err == 0) {
-            // printf("SET VOL=%f\n", vol);
-            return CONTROL_TRUE;
-        } else {
-            ca_msg(MSGL_WARN,
-                   "could not set HAL output volume: [%4.4s]\n", (char *)&err);
-            return CONTROL_FALSE;
-        }
-    /* Everything is currently unimplemented */
-    default:
-        return CONTROL_FALSE;
-    }
 
+        CHECK_CA_ERROR("could not set HAL output volume");
+        return CONTROL_TRUE;
+
+    } // end switch
+    return CONTROL_UNKNOWN;
+
+coreaudio_error:
+    return CONTROL_ERROR;
 }
 
 
