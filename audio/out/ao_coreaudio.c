@@ -96,12 +96,14 @@ static bool check_ca_st(int level, OSStatus code, const char *message)
     return false;
 }
 
-#define CHECK_CA_ERROR(message) \
+#define CHECK_CA_ERROR_L(label, message) \
     do { \
         if (!check_ca_st(MSGL_ERR, err, message)) { \
-            goto coreaudio_error; \
+            goto label; \
         } \
     } while (0)
+
+#define CHECK_CA_ERROR(message) CHECK_CA_ERROR_L(coreaudio_error, message)
 
 struct priv
 {
@@ -249,34 +251,30 @@ static OSStatus GetAudioProperty(AudioObjectID id,
 static UInt32 GetAudioPropertyArray(AudioObjectID id,
                                     AudioObjectPropertySelector selector,
                                     AudioObjectPropertyScope scope,
-                                    void **outData)
+                                    void **data)
 {
     OSStatus err;
-    AudioObjectPropertyAddress property_address;
-    UInt32 i_param_size;
+    AudioObjectPropertyAddress p_addr;
+    UInt32 p_size;
 
-    property_address.mSelector = selector;
-    property_address.mScope    = scope;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = selector;
+    p_addr.mScope    = scope;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
-    err = AudioObjectGetPropertyDataSize(id, &property_address, 0, NULL,
-                                         &i_param_size);
+    err = AudioObjectGetPropertyDataSize(id, &p_addr, 0, NULL, &p_size);
+    CHECK_CA_ERROR("Can't fetch property size");
 
-    if (err != noErr)
-        return 0;
+    *data = malloc(p_size);
 
-    *outData = malloc(i_param_size);
+    err = AudioObjectGetPropertyData(id, &p_addr, 0, NULL, &p_size, *data);
+    CHECK_CA_ERROR_L(coreaudio_error_free, "Can't fetch property data %s");
 
+    return p_size;
 
-    err = AudioObjectGetPropertyData(id, &property_address, 0, NULL,
-                                     &i_param_size, *outData);
-
-    if (err != noErr) {
-        free(*outData);
-        return 0;
-    }
-
-    return i_param_size;
+coreaudio_error_free:
+    free(*data);
+coreaudio_error:
+    return 0;
 }
 
 static UInt32 GetGlobalAudioPropertyArray(AudioObjectID id,
