@@ -52,6 +52,7 @@
 #include "core/mp_ring.h"
 
 #define ca_msg(a, b ...) mp_msg(MSGT_AO, a, "AO: [coreaudio] " b)
+#define CA_CFSTR_ENCODING kCFStringEncodingASCII
 
 static void audio_pause(struct ao *ao);
 static void audio_resume(struct ao *ao);
@@ -287,32 +288,28 @@ static UInt32 GetGlobalAudioPropertyArray(AudioObjectID id,
 
 static OSStatus GetAudioPropertyString(AudioObjectID id,
                                        AudioObjectPropertySelector selector,
-                                       char **outData)
+                                       char **data)
 {
     OSStatus err;
-    AudioObjectPropertyAddress property_address;
-    UInt32 i_param_size;
+    AudioObjectPropertyAddress p_addr;
+    UInt32 p_size = sizeof(CFStringRef);
     CFStringRef string;
-    CFIndex string_length;
 
-    property_address.mSelector = selector;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = selector;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
-    i_param_size = sizeof(CFStringRef);
-    err = AudioObjectGetPropertyData(id, &property_address, 0, NULL,
-                                     &i_param_size, &string);
-    if (err != noErr)
-        return err;
+    err = AudioObjectGetPropertyData(id, &p_addr, 0, NULL, &p_size, &string);
+    CHECK_CA_ERROR("Can't fetch array property");
 
-    string_length = CFStringGetMaximumSizeForEncoding(CFStringGetLength(string),
-                                                      kCFStringEncodingASCII);
-    *outData = malloc(string_length + 1);
-    CFStringGetCString(string, *outData, string_length + 1,
-                       kCFStringEncodingASCII);
+    CFIndex size =
+        CFStringGetMaximumSizeForEncoding(
+            CFStringGetLength(string), CA_CFSTR_ENCODING) + 1;
 
+    *data = malloc(size);
+    CFStringGetCString(string, *data, size, CA_CFSTR_ENCODING);
     CFRelease(string);
-
+coreaudio_error:
     return err;
 }
 
