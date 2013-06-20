@@ -239,13 +239,13 @@ static OSStatus GetAudioProperty(AudioObjectID id,
                                  AudioObjectPropertySelector selector,
                                  UInt32 outSize, void *outData)
 {
-    AudioObjectPropertyAddress property_address;
+    AudioObjectPropertyAddress p_addr;
 
-    property_address.mSelector = selector;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = selector;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
-    return AudioObjectGetPropertyData(id, &property_address, 0, NULL, &outSize,
+    return AudioObjectGetPropertyData(id, &p_addr, 0, NULL, &outSize,
                                       outData);
 }
 
@@ -317,13 +317,13 @@ static OSStatus SetAudioProperty(AudioObjectID id,
                                  AudioObjectPropertySelector selector,
                                  UInt32 inDataSize, void *inData)
 {
-    AudioObjectPropertyAddress property_address;
+    AudioObjectPropertyAddress p_addr;
 
-    property_address.mSelector = selector;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = selector;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
-    return AudioObjectSetPropertyData(id, &property_address, 0, NULL,
+    return AudioObjectSetPropertyData(id, &p_addr, 0, NULL,
                                       inDataSize, inData);
 }
 
@@ -331,13 +331,13 @@ static Boolean IsAudioPropertySettable(AudioObjectID id,
                                        AudioObjectPropertySelector selector,
                                        Boolean *outData)
 {
-    AudioObjectPropertyAddress property_address;
+    AudioObjectPropertyAddress p_addr;
 
-    property_address.mSelector = selector;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = selector;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
-    return AudioObjectIsPropertySettable(id, &property_address, outData);
+    return AudioObjectIsPropertySettable(id, &p_addr, outData);
 }
 
 static int AudioDeviceSupportsDigital(AudioDeviceID i_dev_id);
@@ -671,7 +671,7 @@ static int OpenSPDIF(struct ao *ao)
     Boolean b_writeable = 0;
     AudioStreamID *p_streams = NULL;
     int i, i_streams = 0;
-    AudioObjectPropertyAddress property_address;
+    AudioObjectPropertyAddress p_addr;
 
     /* Start doing the SPDIF setup process. */
     p->b_digital = 1;
@@ -689,12 +689,12 @@ static int OpenSPDIF(struct ao *ao)
         goto err_out;
     }
 
-    property_address.mSelector = kAudioDevicePropertySupportsMixing;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = kAudioDevicePropertySupportsMixing;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
     /* Set mixable to false if we are allowed to. */
-    if (AudioObjectHasProperty(p->i_selected_dev, &property_address)) {
+    if (AudioObjectHasProperty(p->i_selected_dev, &p_addr)) {
         /* Set mixable to false if we are allowed to. */
         err = IsAudioPropertySettable(p->i_selected_dev,
                                       kAudioDevicePropertySupportsMixing,
@@ -830,12 +830,12 @@ static int OpenSPDIF(struct ao *ao)
     if (!AudioStreamChangeFormat(p->i_stream_id, p->stream_format))
         goto err_out;
 
-    property_address.mSelector = kAudioDevicePropertyDeviceHasChanged;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = kAudioDevicePropertyDeviceHasChanged;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
     err = AudioObjectAddPropertyListener(p->i_selected_dev,
-                                         &property_address,
+                                         &p_addr,
                                          DeviceListener,
                                          NULL);
     if (err != noErr)
@@ -986,7 +986,7 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
 {
     OSStatus err = noErr;
     int i;
-    AudioObjectPropertyAddress property_address;
+    AudioObjectPropertyAddress p_addr;
 
     static volatile int stream_format_changed;
     stream_format_changed = 0;
@@ -994,12 +994,12 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
     print_format(MSGL_V, "setting stream format:", &change_format);
 
     /* Install the callback. */
-    property_address.mSelector = kAudioStreamPropertyPhysicalFormat;
-    property_address.mScope    = kAudioObjectPropertyScopeGlobal;
-    property_address.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr.mSelector = kAudioStreamPropertyPhysicalFormat;
+    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
+    p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
     err = AudioObjectAddPropertyListener(i_stream_id,
-                                         &property_address,
+                                         &p_addr,
                                          StreamListener,
                                          (void *)&stream_format_changed);
     if (err != noErr) {
@@ -1050,7 +1050,7 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
 
     /* Removing the property listener. */
     err = AudioObjectRemovePropertyListener(i_stream_id,
-                                            &property_address,
+                                            &p_addr,
                                             StreamListener,
                                             (void *)&stream_format_changed);
     if (err != noErr) {
