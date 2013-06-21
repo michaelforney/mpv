@@ -265,3 +265,40 @@ static int AudioDeviceSupportsDigital(AudioDeviceID device)
     free(streams);
     return CONTROL_FALSE;
 }
+
+static OSStatus ca_property_listener(AudioObjectPropertySelector selector,
+                                     AudioObjectID object, uint32_t n_addresses,
+                                     const AudioObjectPropertyAddress addresses[],
+                                     void *data)
+{
+    // TODO: ++i seems wrong in this context. Check out if it was a programmer
+    // mistake
+    void *talloc_ctx = talloc_new(NULL);
+
+    for (int i = 0; i < n_addresses; ++i) {
+        if (addresses[i].mSelector == selector) {
+            ca_msg(MSGL_WARN, "event: property %s changed",
+                              fourcc_repr(talloc_ctx, selector));
+            if (data) *(volatile int *)data = 1;
+            break;
+        }
+    }
+    talloc_free(talloc_ctx);
+    return noErr;
+}
+
+static OSStatus ca_stream_listener(AudioObjectID object, uint32_t n_addresses,
+                                   const AudioObjectPropertyAddress addresses[],
+                                   void *data)
+{
+    return ca_property_listener(kAudioStreamPropertyPhysicalFormat,
+                                object, n_addresses, addresses, data);
+}
+
+static OSStatus ca_device_listener(AudioObjectID object, uint32_t n_addresses,
+                                   const AudioObjectPropertyAddress addresses[],
+                                   void *data)
+{
+    return ca_property_listener(kAudioDevicePropertyDeviceHasChanged,
+                                object, n_addresses, addresses, data);
+}

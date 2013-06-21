@@ -179,14 +179,6 @@ coreaudio_error:
 static int OpenSPDIF(struct ao *ao);
 static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
                                    AudioStreamBasicDescription change_format);
-static OSStatus StreamListener(AudioObjectID inObjectID,
-                               UInt32 inNumberAddresses,
-                               const AudioObjectPropertyAddress inAddresses[],
-                               void *inClientData);
-static OSStatus DeviceListener(AudioObjectID inObjectID,
-                               UInt32 inNumberAddresses,
-                               const AudioObjectPropertyAddress inAddresses[],
-                               void *inClientData);
 
 static void print_help(void)
 {
@@ -661,10 +653,11 @@ static int OpenSPDIF(struct ao *ao)
     p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
     p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
+    const int *stream_format_changed = &(p->b_stream_format_changed);
     err = AudioObjectAddPropertyListener(p->i_selected_dev,
                                          &p_addr,
-                                         DeviceListener,
-                                         NULL);
+                                         ca_device_listener,
+                                         (void *)stream_format_changed);
     if (err != noErr)
         ca_msg(MSGL_WARN,
                "AudioDeviceAddPropertyListener for kAudioDevicePropertyDeviceHasChanged failed: [%4.4s]\n",
@@ -760,7 +753,7 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
 
     err = AudioObjectAddPropertyListener(i_stream_id,
                                          &p_addr,
-                                         StreamListener,
+                                         ca_stream_listener,
                                          (void *)&stream_format_changed);
     if (err != noErr) {
         ca_msg(MSGL_WARN,
@@ -811,7 +804,7 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
     /* Removing the property listener. */
     err = AudioObjectRemovePropertyListener(i_stream_id,
                                             &p_addr,
-                                            StreamListener,
+                                            ca_stream_listener,
                                             (void *)&stream_format_changed);
     if (err != noErr) {
         ca_msg(MSGL_WARN,
@@ -992,45 +985,6 @@ static void audio_resume(struct ao *ao)
                    (char *)&err);
     }
     p->paused = 0;
-}
-
-/*****************************************************************************
-* StreamListener
-*****************************************************************************/
-static OSStatus StreamListener(AudioObjectID inObjectID,
-                               UInt32 inNumberAddresses,
-                               const AudioObjectPropertyAddress inAddresses[],
-                               void *inClientData)
-{
-    for (int i = 0; i < inNumberAddresses; ++i) {
-        if (inAddresses[i].mSelector == kAudioStreamPropertyPhysicalFormat) {
-            ca_msg(MSGL_WARN,
-                   "got notify kAudioStreamPropertyPhysicalFormat changed.\n");
-            if (inClientData)
-                *(volatile int *)inClientData = 1;
-            break;
-        }
-    }
-    return noErr;
-}
-
-static OSStatus DeviceListener(AudioObjectID inObjectID,
-                               UInt32 inNumberAddresses,
-                               const AudioObjectPropertyAddress inAddresses[],
-                               void *inClientData)
-{
-    struct ao *ao  = inClientData;
-    struct priv *p = ao->priv;
-
-    for (int i = 0; i < inNumberAddresses; ++i) {
-        if (inAddresses[i].mSelector == kAudioDevicePropertyDeviceHasChanged) {
-            ca_msg(MSGL_WARN,
-                   "got notify kAudioDevicePropertyDeviceHasChanged.\n");
-            p->b_stream_format_changed = 1;
-            break;
-        }
-    }
-    return noErr;
 }
 
 const struct ao_driver audio_out_coreaudio = {
