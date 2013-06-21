@@ -32,7 +32,6 @@
  * when you are wanting to do good buffering of audio).
  */
 
-#include <AudioToolbox/AudioToolbox.h>
 #include "config.h"
 
 #include "audio/out/ao_coreaudio_common.c"
@@ -179,8 +178,6 @@ coreaudio_error:
     return CONTROL_ERROR;
 }
 
-static int AudioDeviceSupportsDigital(AudioDeviceID i_dev_id);
-static int AudioStreamSupportsDigital(AudioStreamID i_stream_id);
 static int OpenSPDIF(struct ao *ao);
 static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
                                    AudioStreamBasicDescription change_format);
@@ -741,73 +738,6 @@ err_out:
                    (char *)&err);
     }
     return CONTROL_FALSE;
-}
-
-/*****************************************************************************
-* AudioDeviceSupportsDigital: Check i_dev_id for digital stream support.
-*****************************************************************************/
-static int AudioDeviceSupportsDigital(AudioDeviceID i_dev_id)
-{
-    UInt32 i_param_size = 0;
-    AudioStreamID *p_streams = NULL;
-    int i = 0, i_streams = 0;
-    int b_return = CONTROL_FALSE;
-
-    /* Retrieve all the output streams. */
-    i_param_size = GetAudioPropertyArray(i_dev_id,
-                                         kAudioDevicePropertyStreams,
-                                         kAudioDevicePropertyScopeOutput,
-                                         (void **)&p_streams);
-
-    if (!i_param_size) {
-        ca_msg(MSGL_WARN, "could not get number of streams.\n");
-        return CONTROL_FALSE;
-    }
-
-    i_streams = i_param_size / sizeof(AudioStreamID);
-
-    for (i = 0; i < i_streams; ++i) {
-        if (AudioStreamSupportsDigital(p_streams[i]))
-            b_return = CONTROL_OK;
-    }
-
-    free(p_streams);
-    return b_return;
-}
-
-/*****************************************************************************
-* AudioStreamSupportsDigital: Check i_stream_id for digital stream support.
-*****************************************************************************/
-static int AudioStreamSupportsDigital(AudioStreamID i_stream_id)
-{
-    UInt32 i_param_size;
-    AudioStreamRangedDescription *p_format_list = NULL;
-    int i, i_formats, b_return = CONTROL_FALSE;
-
-    /* Retrieve all the stream formats supported by each output stream. */
-    i_param_size = GetGlobalAudioPropertyArray(i_stream_id,
-                                               kAudioStreamPropertyAvailablePhysicalFormats,
-                                               (void **)&p_format_list);
-
-    if (!i_param_size) {
-        ca_msg(MSGL_WARN, "Could not get number of stream formats.\n");
-        return CONTROL_FALSE;
-    }
-
-    i_formats = i_param_size / sizeof(AudioStreamRangedDescription);
-
-    for (i = 0; i < i_formats; ++i) {
-        ca_print_asbd("supported format:", &(p_format_list[i].mFormat));
-
-        if (p_format_list[i].mFormat.mFormatID == 'IAC3' ||
-            p_format_list[i].mFormat.mFormatID == 'iac3' ||
-            p_format_list[i].mFormat.mFormatID == kAudioFormat60958AC3 ||
-            p_format_list[i].mFormat.mFormatID == kAudioFormatAC3)
-            b_return = CONTROL_OK;
-    }
-
-    free(p_format_list);
-    return b_return;
 }
 
 /*****************************************************************************

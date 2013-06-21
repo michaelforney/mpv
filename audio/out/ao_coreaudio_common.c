@@ -22,6 +22,7 @@
  * on CoreAudio but not the AUHAL (such as using AudioQueue services).
  */
 
+#include <AudioToolbox/AudioToolbox.h>
 #include <AudioUnit/AudioUnit.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -203,4 +204,64 @@ static Boolean IsAudioPropertySettable(AudioObjectID id,
     p_addr.mElement  = kAudioObjectPropertyElementMaster;
 
     return AudioObjectIsPropertySettable(id, &p_addr, outData);
+}
+
+static int AudioStreamSupportsDigital(AudioStreamID stream)
+{
+    AudioStreamRangedDescription *formats = NULL;
+
+    /* Retrieve all the stream formats supported by each output stream. */
+    uint32_t size =
+        GetGlobalAudioPropertyArray(stream,
+                                    kAudioStreamPropertyAvailablePhysicalFormats,
+                                    (void **)&formats);
+
+    if (!size) {
+        ca_msg(MSGL_WARN, "Could not get number of stream formats.\n");
+        return CONTROL_FALSE;
+    }
+
+    const int n_formats = size / sizeof(AudioStreamRangedDescription);
+    for (int i = 0; i < n_formats; ++i) {
+        AudioStreamBasicDescription asbd = formats[i].mFormat;
+        ca_print_asbd("supported format:", &(asbd));
+
+        switch (asbd.mFormatID)
+        case 'IAC3':
+        case 'iac3':
+        case  kAudioFormat60958AC3:
+        case  kAudioFormatAC3:
+            free(formats);
+            return CONTROL_OK;
+    }
+
+    free(formats);
+    return CONTROL_FALSE;
+}
+
+static int AudioDeviceSupportsDigital(AudioDeviceID device)
+{
+    AudioStreamID *streams = NULL;
+
+    /* Retrieve all the output streams. */
+    uint32_t size = GetAudioPropertyArray(device,
+                                          kAudioDevicePropertyStreams,
+                                          kAudioDevicePropertyScopeOutput,
+                                          (void **)&streams);
+
+    if (!size) {
+        ca_msg(MSGL_WARN, "could not get number of streams.\n");
+        return CONTROL_FALSE;
+    }
+
+    const int n_streams = size / sizeof(AudioStreamID);
+    for (int i = 0; i < n_streams; ++i) {
+        if (AudioStreamSupportsDigital(streams[i])) {
+            free(streams);
+            return CONTROL_OK;
+        }
+    }
+
+    free(streams);
+    return CONTROL_FALSE;
 }
