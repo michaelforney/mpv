@@ -176,7 +176,6 @@ coreaudio_error:
     return CONTROL_ERROR;
 }
 
-static int OpenSPDIF(struct ao *ao);
 static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
                                    AudioStreamBasicDescription change_format);
 
@@ -220,6 +219,9 @@ static void print_help(void)
 
     free(devs);
 }
+
+static int init_lpcm(struct ao *ao, AudioStreamBasicDescription asbd);
+static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd);
 
 static int init(struct ao *ao, char *params)
 {
@@ -282,12 +284,6 @@ static int init(struct ao *ao, char *params)
 
     free(device_name);
 
-    /* Probe whether device support S/PDIF stream output if input is AC3 stream. */
-    if (AF_FORMAT_IS_AC3(ao->format)) {
-        if (AudioDeviceSupportsDigital(selected_device))
-            p->b_supports_digital = 1;
-    }
-
     // Save selected device id
     p->i_selected_dev = selected_device;
 
@@ -323,51 +319,30 @@ static int init(struct ao *ao, char *params)
 
     ca_print_asbd("source format:", &asbd);
 
-    if (p->b_supports_digital) {
-        uint32_t is_alive = 1;
-        err = GetAudioProperty(p->i_selected_dev,
-                               kAudioDevicePropertyDeviceIsAlive,
-                               sizeof(uint32_t), &is_alive);
-        if (err != noErr)
-            ca_msg(MSGL_WARN,
-                   "could not check whether device is alive: [%4.4s]\n",
-                   (char *)&err);
-        if (!is_alive)
-            ca_msg(MSGL_WARN, "device is not alive\n");
-
-        /* S/PDIF output need device in HogMode. */
-        err = GetAudioProperty(p->i_selected_dev,
-                               kAudioDevicePropertyHogMode,
-                               sizeof(pid_t), &p->i_hog_pid);
-
-        if (err != noErr) {
-            /* This is not a fatal error. Some drivers simply don't support this property. */
-            ca_msg(MSGL_WARN,
-                   "could not check whether device is hogged: [%4.4s]\n",
-                   (char *)&err);
-            p->i_hog_pid = -1;
-        }
-
-        if (p->i_hog_pid != -1 && p->i_hog_pid != getpid()) {
-            ca_msg(MSGL_WARN,
-                   "Selected audio device is exclusively in use by another program.\n");
-            goto coreaudio_error;
-        }
-        p->stream_format = asbd;
-        return OpenSPDIF(ao);
+    /* Probe whether device support S/PDIF stream output if input is AC3 stream. */
+    if (AF_FORMAT_IS_AC3(ao->format)) {
+        if (AudioDeviceSupportsDigital(selected_device))
+            p->b_supports_digital = 1;
     }
 
-    // Original analog output code
-    // TODO: move to an open_lpcm function
+    if (p->b_supports_digital)
+        return init_digital(ao, asbd);
+    else
+        return init_lpcm(ao, asbd);
+
+coreaudio_error:
+    return CONTROL_FALSE;
+}
+
+static int init_lpcm(struct ao *ao, AudioStreamBasicDescription asbd)
+{
+    OSStatus err;
     uint32_t size;
+    struct priv *p = ao->priv;
 
     AudioComponentDescription desc = (AudioComponentDescription) {
         .componentType         = kAudioUnitType_Output,
-        // TODO: it seems stupid that after we selected a device we do again
-        // lookup for a component... Look for a better API maybe?
-        .componentSubType      = device_opt < 0 ?
-                                 kAudioUnitSubType_SystemOutput :
-                                 kAudioUnitSubType_HALOutput,
+        .componentSubType      = kAudioUnitSubType_HALOutput,
         .componentManufacturer = kAudioUnitManufacturer_Apple,
         .componentFlags        = 0,
         .componentFlagsMask    = 0,
@@ -401,15 +376,17 @@ static int init(struct ao *ao, char *params)
                                kAudioUnitScope_Global, 0, &p->i_selected_dev,
                                sizeof(p->i_selected_dev));
 
-    ao->samplerate = asbd.mSampleRate;
 
-    if (!ao_chmap_sel_get_def(ao, &chmap_sel, &ao->channels,
-                              asbd.mChannelsPerFrame))
-        goto coreaudio_error_audiounit;
+    // TODO: propably not needed, doesn't look like the channel number is
+    // negotiated... if there is really no negotiation, this should be changed.
+    // Especially for samplerate...
+    // if (!ao_chmap_sel_get_def(ao, &chmap_sel, &ao->channels,
+    //                           asbd.mChannelsPerFrame))
+    //     goto coreaudio_error_audiounit;
+    // ao->samplerate = asbd.mSampleRate;
+    // ao->bps   = ao->samplerate * asbd.mBytesPerFrame;
 
-    ao->bps   = ao->samplerate * asbd.mBytesPerFrame;
     p->buffer = mp_ring_new(p, get_ring_size(ao));
-
     print_buffer(p->buffer);
 
     AURenderCallbackStruct render_cb = (AURenderCallbackStruct) {
@@ -436,10 +413,7 @@ coreaudio_error:
     return CONTROL_FALSE;
 }
 
-/*****************************************************************************
-* Setup a encoded digital stream (SPDIF)
-*****************************************************************************/
-static int OpenSPDIF(struct ao *ao)
+static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
 {
     struct priv *p = ao->priv;
     OSStatus err = noErr;
@@ -448,6 +422,38 @@ static int OpenSPDIF(struct ao *ao)
     AudioStreamID *p_streams = NULL;
     int i, i_streams = 0;
     AudioObjectPropertyAddress p_addr;
+
+    uint32_t is_alive = 1;
+    err = GetAudioProperty(p->i_selected_dev,
+                               kAudioDevicePropertyDeviceIsAlive,
+                               sizeof(uint32_t), &is_alive);
+    if (err != noErr)
+        ca_msg(MSGL_WARN,
+               "could not check whether device is alive: [%4.4s]\n",
+               (char *)&err);
+    if (!is_alive)
+        ca_msg(MSGL_WARN, "device is not alive\n");
+
+    /* S/PDIF output need device in HogMode. */
+    err = GetAudioProperty(p->i_selected_dev,
+                           kAudioDevicePropertyHogMode,
+                           sizeof(pid_t), &p->i_hog_pid);
+
+    if (err != noErr) {
+        /* This is not a fatal error. Some drivers simply don't support this property. */
+        ca_msg(MSGL_WARN,
+               "could not check whether device is hogged: [%4.4s]\n",
+               (char *)&err);
+        p->i_hog_pid = -1;
+    }
+
+    if (p->i_hog_pid != -1 && p->i_hog_pid != getpid()) {
+        ca_msg(MSGL_WARN,
+               "Selected audio device is exclusively in use by another program.\n");
+        goto err_out;
+    }
+
+    p->stream_format = asbd;
 
     /* Start doing the SPDIF setup process. */
     p->b_digital = 1;
