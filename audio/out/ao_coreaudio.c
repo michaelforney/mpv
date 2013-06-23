@@ -359,7 +359,7 @@ static int init(struct ao *ao, char *params)
 
     // Original analog output code
     // TODO: move to an open_lpcm function
-    uint32_t size, maxFrames;
+    uint32_t size;
 
     AudioComponentDescription desc = (AudioComponentDescription) {
         .componentType         = kAudioUnitType_Output,
@@ -394,14 +394,6 @@ static int init(struct ao *ao, char *params)
 
     CHECK_CA_ERROR_L(coreaudio_error_audiounit,
                      "unable to set the input format on the audio unit");
-
-    size = sizeof(uint32_t);
-    err = AudioUnitGetProperty(p->theOutputUnit,
-                               kAudioDevicePropertyBufferSize,
-                               kAudioUnitScope_Input, 0, &maxFrames, &size);
-
-    CHECK_CA_ERROR_L(coreaudio_error_audiounit,
-                     "unable to get buffersize from audio unit");
 
     //Set the Current Device to the Default Output Unit.
     err = AudioUnitSetProperty(p->theOutputUnit,
