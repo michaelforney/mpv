@@ -58,8 +58,6 @@ struct priv_d {
     AudioStreamID i_stream_id;              /* The StreamID that has a cac3 streamformat */
     int i_stream_index;                     /* The index of i_stream_id in an AudioBufferList */
     AudioStreamBasicDescription stream_format; /* The format we changed the stream to */
-    AudioStreamBasicDescription sfmt_revert; /* The original format of the stream */
-    int b_revert;                           /* Whether we need to revert the stream format */
     int b_changed_mixing;                   /* Whether we need to set the mixing mode back */
     int b_stream_format_changed;            /* Flag for main thread to reset stream's format to digital and reset buffer */
     int b_muted;                            /* Are we muted in digital mode? */
@@ -259,7 +257,6 @@ static int init(struct ao *ao, char *params)
         .i_hog_pid = -1,
         .i_stream_id = 0,
         .i_stream_index = -1,
-        .b_revert = 0,
         .b_changed_mixing = 0,
     };
 
@@ -427,215 +424,143 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     struct priv *p = ao->priv;
     struct priv_d *d = p->digital;
     OSStatus err = noErr;
-    UInt32 i_param_size, b_mix = 0;
-    Boolean b_writeable = 0;
-    AudioStreamID *p_streams = NULL;
-    int i, i_streams = 0;
     AudioObjectPropertyAddress p_addr;
+    uint32_t size;
 
     uint32_t is_alive = 1;
     err = GetAudioProperty(p->i_selected_dev,
                                kAudioDevicePropertyDeviceIsAlive,
                                sizeof(uint32_t), &is_alive);
-    if (err != noErr)
-        ca_msg(MSGL_WARN,
-               "could not check whether device is alive: [%4.4s]\n",
-               (char *)&err);
+
+    CHECK_CA_WARN( "could not check whether device is alive");
+
     if (!is_alive)
         ca_msg(MSGL_WARN, "device is not alive\n");
 
-    /* S/PDIF output need device in HogMode. */
-    err = GetAudioProperty(p->i_selected_dev,
-                           kAudioDevicePropertyHogMode,
-                           sizeof(pid_t), &d->i_hog_pid);
-
-    if (err != noErr) {
-        /* This is not a fatal error. Some drivers simply don't support this property. */
-        ca_msg(MSGL_WARN,
-               "could not check whether device is hogged: [%4.4s]\n",
-               (char *)&err);
-        d->i_hog_pid = -1;
-    }
-
-    if (d->i_hog_pid != -1 && d->i_hog_pid != getpid()) {
-        ca_msg(MSGL_WARN,
-               "Selected audio device is exclusively in use by another program.\n");
-        goto err_out;
-    }
-
     d->stream_format = asbd;
 
-    /* Start doing the SPDIF setup process. */
     p->b_digital = 1;
 
-    /* Hog the device. */
     d->i_hog_pid = getpid();
 
     err = SetAudioProperty(p->i_selected_dev,
                            kAudioDevicePropertyHogMode,
                            sizeof(d->i_hog_pid), &d->i_hog_pid);
-    if (err != noErr) {
-        ca_msg(MSGL_WARN, "failed to set hogmode: [%4.4s]\n",
-               (char *)&err);
+
+    if (! CHECK_CA_WARN("faild to set hogmode")) {
         d->i_hog_pid = -1;
-        goto err_out;
+        goto coreaudio_error;
     }
 
-    p_addr.mSelector = kAudioDevicePropertySupportsMixing;
-    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
-    p_addr.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr = (AudioObjectPropertyAddress) {
+        .mSelector = kAudioDevicePropertySupportsMixing,
+        .mScope    = kAudioObjectPropertyScopeGlobal,
+        .mElement  = kAudioObjectPropertyElementMaster,
+    };
 
     /* Set mixable to false if we are allowed to. */
     if (AudioObjectHasProperty(p->i_selected_dev, &p_addr)) {
-        /* Set mixable to false if we are allowed to. */
+        Boolean b_writeable = 0;
+
         err = IsAudioPropertySettable(p->i_selected_dev,
                                       kAudioDevicePropertySupportsMixing,
                                       &b_writeable);
-        err = GetAudioProperty(p->i_selected_dev,
-                               kAudioDevicePropertySupportsMixing,
-                               sizeof(UInt32), &b_mix);
-        if (err == noErr && b_writeable) {
-            b_mix = 0;
+
+        if (b_writeable) {
+            uint32_t mix = 0;
             err = SetAudioProperty(p->i_selected_dev,
                                    kAudioDevicePropertySupportsMixing,
-                                   sizeof(UInt32), &b_mix);
+                                   sizeof(uint32_t), &mix);
+            CHECK_CA_ERROR("failed to set mixmode");
             d->b_changed_mixing = 1;
         }
-        if (err != noErr) {
-            ca_msg(MSGL_WARN, "failed to set mixmode: [%4.4s]\n",
-                   (char *)&err);
-            goto err_out;
-        }
     }
 
+    AudioStreamID *streams = NULL;
     /* Get a list of all the streams on this device. */
-    i_param_size = GetAudioPropertyArray(p->i_selected_dev,
-                                         kAudioDevicePropertyStreams,
-                                         kAudioDevicePropertyScopeOutput,
-                                         (void **)&p_streams);
+    size = GetAudioPropertyArray(p->i_selected_dev,
+                                 kAudioDevicePropertyStreams,
+                                 kAudioDevicePropertyScopeOutput,
+                                 (void **)&streams);
 
-    if (!i_param_size) {
-        ca_msg(MSGL_WARN, "could not get number of streams.\n");
-        goto err_out;
+    if (!size) {
+        ca_msg(MSGL_WARN, "could not get number of streams.");
+        goto coreaudio_error;
     }
 
-    i_streams = i_param_size / sizeof(AudioStreamID);
+    int streams_n = size / sizeof(AudioStreamID);
 
-    ca_msg(MSGL_V, "current device stream number: %d\n", i_streams);
+    // TODO: ++i is quite fishy in here. Investigate!
+    for (int i = 0; i < streams_n && d->i_stream_index < 0; ++i) {
+        bool digital = AudioStreamSupportsDigital(streams[i]);
 
-    for (i = 0; i < i_streams && d->i_stream_index < 0; ++i) {
-        /* Find a stream with a cac3 stream. */
-        AudioStreamRangedDescription *p_format_list = NULL;
-        int i_formats = 0, j = 0, b_digital = 0;
+        if (digital) {
+            /* Find a stream with a cac3 stream. */
+            AudioStreamRangedDescription *formats = NULL;
+            size = GetGlobalAudioPropertyArray(streams[i],
+                                               kAudioStreamPropertyAvailablePhysicalFormats,
+                                               (void **)&formats);
 
-        i_param_size = GetGlobalAudioPropertyArray(p_streams[i],
-                                                   kAudioStreamPropertyAvailablePhysicalFormats,
-                                                   (void **)&p_format_list);
-
-        if (!i_param_size) {
-            ca_msg(MSGL_WARN,
-                   "Could not get number of stream formats.\n");
-            continue;
-        }
-
-        i_formats = i_param_size / sizeof(AudioStreamRangedDescription);
-
-        /* Check if one of the supported formats is a digital format. */
-        for (j = 0; j < i_formats; ++j) {
-            if (p_format_list[j].mFormat.mFormatID == 'IAC3' ||
-                p_format_list[j].mFormat.mFormatID == 'iac3' ||
-                p_format_list[j].mFormat.mFormatID == kAudioFormat60958AC3 ||
-                p_format_list[j].mFormat.mFormatID == kAudioFormatAC3) {
-                b_digital = 1;
-                break;
+            if (!size) {
+                ca_msg(MSGL_WARN, "could not get number of stream formats.\n");
+                continue; // try next one
             }
-        }
 
-        if (b_digital) {
+            int formats_n = size / sizeof(AudioStreamRangedDescription);
             /* If this stream supports a digital (cac3) format, then set it. */
-            int i_requested_rate_format = -1;
-            int i_current_rate_format = -1;
-            int i_backup_rate_format = -1;
+            int req_rate_format = -1;
+            int max_rate_format = -1;
 
-            d->i_stream_id = p_streams[i];
+            d->i_stream_id = streams[i];
             d->i_stream_index = i;
 
-            if (d->b_revert == 0) {
-                /* Retrieve the original format of this stream first if not done so already. */
-                err = GetAudioProperty(d->i_stream_id,
-                                       kAudioStreamPropertyPhysicalFormat,
-                                       sizeof(d->sfmt_revert),
-                                       &d->sfmt_revert);
-                if (err != noErr) {
-                    ca_msg(MSGL_WARN,
-                           "Could not retrieve the original stream format: [%4.4s]\n",
-                           (char *)&err);
-                    free(p_format_list);
-                    continue;
-                }
-                d->b_revert = 1;
-            }
-
-            for (j = 0; j < i_formats; ++j)
-                if (p_format_list[j].mFormat.mFormatID == 'IAC3' ||
-                    p_format_list[j].mFormat.mFormatID == 'iac3' ||
-                    p_format_list[j].mFormat.mFormatID ==
-                    kAudioFormat60958AC3 ||
-                    p_format_list[j].mFormat.mFormatID == kAudioFormatAC3) {
-                    if (p_format_list[j].mFormat.mSampleRate ==
+            // TODO: ++j is fishy. was like this in the original code. Investigate!
+            for (int j = 0; j < formats_n; ++j)
+                if (AudioFormatIsDigital(asbd)) {
+                    // select the digital format that has exactly the same
+                    // samplerate. If an exact match cannot be found, select
+                    // the format with highest samplerate as backup.
+                    if (formats[j].mFormat.mSampleRate ==
                         d->stream_format.mSampleRate) {
-                        i_requested_rate_format = j;
+                        req_rate_format = j;
                         break;
-                    }
-                    if (p_format_list[j].mFormat.mSampleRate ==
-                        d->sfmt_revert.mSampleRate)
-                        i_current_rate_format = j;
-                    else if (i_backup_rate_format < 0 ||
-                             p_format_list[j].mFormat.mSampleRate >
-                             p_format_list[i_backup_rate_format].mFormat.
-                             mSampleRate)
-                        i_backup_rate_format = j;
+                    } else if (max_rate_format < 0 ||
+                        formats[j].mFormat.mSampleRate >
+                        formats[max_rate_format].mFormat.mSampleRate)
+                        max_rate_format = j;
                 }
 
-            if (i_requested_rate_format >= 0) /* We prefer to output at the samplerate of the original audio. */
-                d->stream_format =
-                    p_format_list[i_requested_rate_format].mFormat;
-            else if (i_current_rate_format >= 0) /* If not possible, we will try to use the current samplerate of the device. */
-                d->stream_format =
-                    p_format_list[i_current_rate_format].mFormat;
+            if (req_rate_format >= 0)
+                d->stream_format = formats[req_rate_format].mFormat;
             else
-                d->stream_format = p_format_list[i_backup_rate_format].mFormat;
-            /* And if we have to, any digital format will be just fine (highest rate possible). */
+                d->stream_format = formats[max_rate_format].mFormat;
+
+            free(formats);
         }
-        free(p_format_list);
     }
-    free(p_streams);
+
+    free(streams);
 
     if (d->i_stream_index < 0) {
-        ca_msg(MSGL_WARN,
-               "Cannot find any digital output stream format when OpenSPDIF().\n");
-        goto err_out;
+        ca_msg(MSGL_WARN, "can't find any digital output stream format");
+        goto coreaudio_error;
     }
 
-    ca_print_asbd("original stream format:", &d->sfmt_revert);
-
     if (!AudioStreamChangeFormat(d->i_stream_id, d->stream_format))
-        goto err_out;
+        goto coreaudio_error;
 
-    p_addr.mSelector = kAudioDevicePropertyDeviceHasChanged;
-    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
-    p_addr.mElement  = kAudioObjectPropertyElementMaster;
+    p_addr = (AudioObjectPropertyAddress) {
+        .mSelector = kAudioDevicePropertyDeviceHasChanged,
+        .mScope    = kAudioObjectPropertyScopeGlobal,
+        .mElement  = kAudioObjectPropertyElementMaster,
+    };
 
     const int *stream_format_changed = &(d->b_stream_format_changed);
     err = AudioObjectAddPropertyListener(p->i_selected_dev,
                                          &p_addr,
                                          ca_device_listener,
                                          (void *)stream_format_changed);
-    if (err != noErr)
-        ca_msg(MSGL_WARN,
-               "AudioDeviceAddPropertyListener for kAudioDevicePropertyDeviceHasChanged failed: [%4.4s]\n",
-               (char *)&err);
-
+    CHECK_CA_ERROR("cannot install format change listener during init");
 
     /* FIXME: If output stream is not native byte-order, we need change endian somewhere. */
     /*        Although there's no such case reported.                                     */
@@ -671,27 +596,14 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     if (err != noErr || d->renderCallback == NULL) {
         ca_msg(MSGL_WARN, "AudioDeviceAddIOProc failed: [%4.4s]\n",
                (char *)&err);
-        goto err_out1;
+        goto coreaudio_error;
     }
 
     reset(ao);
 
     return CONTROL_TRUE;
 
-err_out1:
-    if (d->b_revert)
-        AudioStreamChangeFormat(d->i_stream_id, d->sfmt_revert);
-err_out:
-    if (d->b_changed_mixing && d->sfmt_revert.mFormatID !=
-        kAudioFormat60958AC3) {
-        int b_mix = 1;
-        err = SetAudioProperty(p->i_selected_dev,
-                               kAudioDevicePropertySupportsMixing,
-                               sizeof(int), &b_mix);
-        if (err != noErr)
-            ca_msg(MSGL_WARN, "failed to set mixmode: [%4.4s]\n",
-                   (char *)&err);
-    }
+coreaudio_error:
     if (d->i_hog_pid == getpid()) {
         d->i_hog_pid = -1;
         err = SetAudioProperty(p->i_selected_dev,
@@ -879,11 +791,7 @@ static void uninit(struct ao *ao, bool immed)
             ca_msg(MSGL_WARN,
                    "AudioDeviceRemoveIOProc failed: [%4.4s]\n", (char *)&err);
 
-        if (d->b_revert)
-            AudioStreamChangeFormat(d->i_stream_id, d->sfmt_revert);
-
-        if (d->b_changed_mixing && d->sfmt_revert.mFormatID !=
-            kAudioFormat60958AC3) {
+        if (d->b_changed_mixing) {
             UInt32 b_mix;
             Boolean b_writeable = 0;
             /* Revert mixable to true if we are allowed to. */
