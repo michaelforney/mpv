@@ -904,6 +904,13 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     if (vo && resize_callback_registered(vo)) {
         NSSize size = to_pixels(vo, [self bounds]).size;
         resize_redraw(vo, size.width, size.height);
+
+        if (![self inLiveResize]) {
+            // If not in live resize window was probably resized from
+            // fullscreen toggle or resize. Make sure we invoke a real repaint
+            // ASAP so that the image is correct.
+            vo->want_redraw = true;
+        }
     } else {
         [[NSColor clearColor] set];
         NSRectFill([self bounds]);
