@@ -570,12 +570,10 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     /* tell mplayer that we need a byteswap on AC3 streams, */
     if (d->stream_format.mFormatID & kAudioFormat60958AC3)
         ao->format = AF_FORMAT_AC3_LE;
-
-    if (d->stream_format.mFormatFlags & kAudioFormatFlagIsBigEndian)
-#endif
+    else if (d->stream_format.mFormatFlags & kAudioFormatFlagIsBigEndian)
         ca_msg(MSGL_WARN,
-               "Output stream has non-native byte order, digital output may fail.\n");
-
+               "Stream has non-native byte order, digital output may fail");
+#endif
 
     ao->samplerate = d->stream_format.mSampleRate;
     mp_chmap_from_channels(&ao->channels, d->stream_format.mChannelsPerFrame);
@@ -583,21 +581,16 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
                   (d->stream_format.mBytesPerPacket /
                    d->stream_format.mFramesPerPacket);
 
-    p->buffer      = mp_ring_new(p, get_ring_size(ao));
-
+    p->buffer = mp_ring_new(p, get_ring_size(ao));
     print_buffer(p->buffer);
 
-    /* Create IOProc callback. */
+    // TODO: why is it not using AudioDeviceAddIOProc here?
     err = AudioDeviceCreateIOProcID(p->i_selected_dev,
                                     (AudioDeviceIOProc)render_cb_digital,
                                     (void *)ao,
                                     &d->renderCallback);
 
-    if (err != noErr || d->renderCallback == NULL) {
-        ca_msg(MSGL_WARN, "AudioDeviceAddIOProc failed: [%4.4s]\n",
-               (char *)&err);
-        goto coreaudio_error;
-    }
+    CHECK_CA_ERROR("failed to register digital render callback");
 
     reset(ao);
 
