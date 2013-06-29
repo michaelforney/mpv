@@ -45,6 +45,14 @@
 #include "video/decode/dec_video.h"
 
 
+int vd_control(struct sh_video *sh_video, int cmd, void *arg)
+{
+    const struct vd_functions *vd = sh_video->vd_driver;
+    if (vd)
+        return vd->control(sh_video, cmd, arg);
+    return CONTROL_ERROR;
+}
+
 int get_video_quality_max(sh_video_t *sh_video)
 {
     vf_instance_t *vf = sh_video->vfilter;
