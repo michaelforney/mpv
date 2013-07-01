@@ -563,7 +563,6 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     p->buffer = mp_ring_new(p, get_ring_size(ao));
     print_buffer(p->buffer);
 
-    // TODO: why is it not using AudioDeviceAddIOProc here?
     err = AudioDeviceCreateIOProcID(p->device,
                                     (AudioDeviceIOProc)render_cis_digital,
                                     (void *)ao,
