@@ -549,7 +549,6 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
 #endif
 
     ao->samplerate = d->stream_asdb.mSampleRate;
-    mp_chmap_from_channels(&ao->channels, d->stream_asdb.mChannelsPerFrame);
     ao->bps = ao->samplerate *
                   (d->stream_asdb.mBytesPerPacket /
                    d->stream_asdb.mFramesPerPacket);
