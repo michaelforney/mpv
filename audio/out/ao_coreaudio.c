@@ -416,15 +416,6 @@ static int init_lpcm(struct ao *ao, AudioStreamBasicDescription asbd)
                          "can't set channel layout bitmap into audio unit");
     }
 
-    // TODO: propably not needed, doesn't look like the channel number is
-    // negotiated... if there is really no negotiation, this should be changed.
-    // Especially for samplerate...
-    // if (!ao_chmap_sel_get_def(ao, &chmap_sel, &ao->channels,
-    //                           asbd.mChannelsPerFrame))
-    //     goto coreaudio_error_audiounit;
-    // ao->samplerate = asbd.mSampleRate;
-    // ao->bps   = ao->samplerate * asbd.mBytesPerFrame;
-
     p->buffer = mp_ring_new(p, get_ring_size(ao));
     print_buffer(p->buffer);
 
