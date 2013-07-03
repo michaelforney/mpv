@@ -396,7 +396,23 @@ static int init_lpcm(struct ao *ao, AudioStreamBasicDescription asbd)
                                kAudioOutputUnitProperty_CurrentDevice,
                                kAudioUnitScope_Global, 0, &p->device,
                                sizeof(p->device));
+    CHECK_CA_ERROR_L(coreaudio_error_audiounit,
+                     "can't link audio unit to selected device");
 
+    if (ao->channels.num > 2) {
+        // No need to set a channel layout for mono and stereo inputs
+        AudioChannelLayout acl = (AudioChannelLayout) {
+            .mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelBitmap,
+            .mChannelBitmap    = mp_chmap_to_waveext(&ao->channels)
+        };
+
+        err = AudioUnitSetProperty(p->audio_unit,
+                                   kAudioUnitProperty_AudioChannelLayout,
+                                   kAudioUnitScope_Input, 0, &acl,
+                                   sizeof(AudioChannelLayout));
+        CHECK_CA_ERROR_L(coreaudio_error_audiounit,
+                         "can't set channel layout bitmap into audio unit");
+    }
 
     // TODO: propably not needed, doesn't look like the channel number is
     // negotiated... if there is really no negotiation, this should be changed.
