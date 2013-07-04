@@ -153,8 +153,7 @@ int mpcodecs_reconfig_vo(sh_video_t *sh, const struct mp_image_params *params)
     p.d_w = d_w;
     p.d_h = d_h;
 
-    vocfg_flags = (opts->fullscreen ? VOFLAG_FULLSCREEN : 0) |
-                  (flip ? VOFLAG_FLIPPING : 0);
+    vocfg_flags = (flip ? VOFLAG_FLIPPING : 0);
 
     // Time to config libvo!
     mp_msg(MSGT_CPLAYER, MSGL_V,
