@@ -336,8 +336,6 @@ static int init(struct ao *ao, char *params)
     if ((ao->format & AF_FORMAT_END_MASK) == AF_FORMAT_BE)
         asbd.mFormatFlags |= kAudioFormatFlagIsBigEndian;
 
-    // TODO: this looks wrong for compressed formats.. (they should have more
-    // than one frame per packet)
     asbd.mFramesPerPacket = 1;
     asbd.mBytesPerPacket = asbd.mBytesPerFrame =
         asbd.mFramesPerPacket * asbd.mChannelsPerFrame *
