@@ -49,10 +49,13 @@ static void egl_resize_func(struct vo_wayland_state *wl,
     int32_t minimum_size = 150;
     int32_t x, y;
 
+    if (!ctx->egl_window)
+        return;
+
     /* get the real window size of the window */
     wl_egl_window_get_attached_size(ctx->egl_window,
-                                    &wl->window->width,
-                                    &wl->window->height);
+                                    &w->width,
+                                    &w->height);
 
     if (width < minimum_size)
         width = minimum_size;
