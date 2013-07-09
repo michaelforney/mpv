@@ -45,8 +45,7 @@
 - (void)fullscreen;
 - (void)mulSize:(float)multiplier;
 - (int)titleHeight;
-- (NSRect)clipFrame:(NSRect)frame withContentAspect:(NSSize) aspect;
-- (void)setContentSize:(NSSize)newSize keepCentered:(BOOL)keepCentered;
+- (void)setCenteredContentSize:(NSSize)newSize;
 @property(nonatomic, assign) struct vo *videoOutput;
 @end
 
@@ -282,7 +281,7 @@ static void update_state_sizes(struct vo_cocoa_state *s,
 static void resize_window_from_stored_size(struct vo *vo)
 {
     struct vo_cocoa_state *s = vo->cocoa;
-    [s->window setContentSize:s->current_video_size keepCentered:YES];
+    [s->window setCenteredContentSize:s->current_video_size];
     [s->window setContentAspectRatio:s->current_video_size];
 }
 
@@ -733,7 +732,7 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
             .width  = self.videoOutput->cocoa->aspdat.prew * multiplier,
             .height = self.videoOutput->cocoa->aspdat.preh * multiplier
         };
-        [self setContentSize:size keepCentered:YES];
+        [self setCenteredContentSize:size];
     }
 }
 
@@ -744,41 +743,13 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     return of.size.height - cb.size.height;
 }
 
-- (NSRect)clipFrame:(NSRect)frame withContentAspect:(NSSize) aspect
-{
-    NSRect vf    = [[self screen] visibleFrame];
-    double ratio = (double)aspect.width / (double)aspect.height;
-
-    // clip frame to screens visibile frame
-    frame = CGRectIntersection(frame, vf);
-
-    NSSize s = frame.size;
-    s.height -= [self titleHeight];
-
-    if (s.width > s.height) {
-        s.width  = ((double)s.height * ratio);
-    } else {
-        s.height = ((double)s.width * 1.0/ratio);
-    }
-
-    s.height += [self titleHeight];
-    frame.size = s;
-
-    return frame;
-}
-
 - (void)setCenteredContentSize:(NSSize)ns
 {
 #define get_center(x) NSMakePoint(CGRectGetMidX((x)), CGRectGetMidY((x)))
-    NSRect of    = [self frame];
-    NSRect vf    = [[self screen] visibleFrame];
+    NSRect of = [self frame];
     NSPoint old_center = get_center(of);
 
-    NSRect nf = NSMakeRect(vf.origin.x, vf.origin.y,
-                           ns.width, ns.height + [self titleHeight]);
-
-    nf = [self clipFrame:nf withContentAspect:ns];
-
+    NSRect nf = NSMakeRect(0, 0, ns.width, ns.height + [self titleHeight]);
     NSPoint new_center = get_center(nf);
 
     int dx0 = old_center.x - new_center.x;
@@ -787,17 +758,13 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     nf.origin.x += dx0;
     nf.origin.y += dy0;
 
-    [self setFrame:nf display:YES animate:NO];
+    [self setFrame:nf display:NO animate:NO];
 #undef get_center
 }
 
-- (void)setContentSize:(NSSize)ns keepCentered:(BOOL)keepCentered
+- (NSRect)constrainFrameRect:(NSRect)rect toScreen:(NSScreen *)screen
 {
-    if (keepCentered) {
-        [self setCenteredContentSize:ns];
-    } else {
-        [self setContentSize:ns];
-    }
+    return rect;
 }
 @end
 
