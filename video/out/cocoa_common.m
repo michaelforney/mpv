@@ -749,8 +749,12 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     NSRect of = [self frame];
     NSPoint old_center = get_center(of);
 
-    NSRect nf = NSMakeRect(0, 0, ns.width, ns.height + [self titleHeight]);
-    NSPoint new_center = get_center(nf);
+    NSRect nf = NSMakeRect(of.origin.x, of.origin.y,
+                           ns.width, ns.height + [self titleHeight]);
+
+    [self setFrame:nf display:NO animate:NO];
+
+    NSPoint new_center = get_center([self frame]);
 
     int dx0 = old_center.x - new_center.x;
     int dy0 = old_center.y - new_center.y;
@@ -758,13 +762,18 @@ int vo_cocoa_cgl_color_size(struct vo *vo)
     nf.origin.x += dx0;
     nf.origin.y += dy0;
 
-    [self setFrame:nf display:NO animate:NO];
+    [self setFrameOrigin:nf.origin];
 #undef get_center
 }
 
 - (NSRect)constrainFrameRect:(NSRect)rect toScreen:(NSScreen *)screen
 {
-    return rect;
+    struct vo *vo = [self videoOutput];
+    if (vo && !vo->opts->border) {
+        return rect;
+    } else {
+        return [super constrainFrameRect:rect toScreen:screen];
+    }
 }
 @end
 
