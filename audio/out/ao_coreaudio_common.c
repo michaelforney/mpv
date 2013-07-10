@@ -478,3 +478,59 @@ static int AudioStreamChangeFormat(AudioStreamID i_stream_id,
     return format_set;
 }
 
+static bool ca_bitmap_from_ch_descriptions(AudioChannelLayout layout,
+                                           uint32_t *bitmap)
+{
+    // If the channel layout uses channel descriptions, from my
+    // exepriments there are there three possibile cases:
+    // * The description has a label kAudioChannelLabel_Unknown:
+    //   Can't do anything about this (looks like non surround
+    //   layouts are like this).
+    // * The description uses positional information: this in
+    //   theory could be used but one would have to map spatial
+    //   positions to labels which is not really feasible.
+    // * The description has a well known label which can be mapped
+    //   to the waveextensible definition: this is the kind of
+    //   descriptions we process here.
+    size_t ch_num = layout.mNumberChannelDescriptions;
+    bool all_channels_valid = true;
+
+    for (int j=0; j < ch_num && all_channels_valid; j++) {
+        AudioChannelLabel label = layout.mChannelDescriptions[j].mChannelLabel;
+        if (label == kAudioChannelLabel_UseCoordinates ||
+            label == kAudioChannelLabel_Unknown ||
+            label > kAudioChannelLabel_TopBackRight) {
+            ca_msg(MSGL_WARN,
+                    "channel label=%d unusable to build channel "
+                    "bitmap, skipping layout\n", label);
+            all_channels_valid = false;
+        } else {
+            *bitmap |= 1ULL << (label - 1);
+        }
+    }
+
+    return all_channels_valid;
+}
+
+static bool ca_bitmap_from_ch_tag(AudioChannelLayout layout,
+                                            uint32_t *bitmap)
+{
+    // This layout is defined exclusively by it's tag. Use the Audio
+    // Format Services API to try and convert it to a bitmap that
+    // mpv can use.
+    uint32_t bitmap_size = sizeof(uint32_t);
+
+    AudioChannelLayoutTag tag = layout.mChannelLayoutTag;
+    OSStatus err = AudioFormatGetProperty(
+        kAudioFormatProperty_BitmapForLayoutTag,
+        sizeof(AudioChannelLayoutTag), &tag,
+        &bitmap_size, bitmap);
+    if (err != noErr) {
+        ca_msg(MSGL_WARN,
+                "channel layout tag=%d unusable to build channel "
+                "bitmap, skipping layout\n", tag);
+        return false;
+    } else {
+        return true;
+    }
+}

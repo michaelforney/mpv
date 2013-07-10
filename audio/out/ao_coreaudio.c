@@ -333,75 +333,25 @@ static int init(struct ao *ao, char *params)
         size_t   n_bitmaps = 0;
 
         for (int i=0; i < n_layouts; i++) {
-            ca_msg(MSGL_WARN, "channel layout %d:\n", i);
+            uint32_t bitmap = 0;
 
             switch (layouts[i].mChannelLayoutTag) {
-            case kAudioChannelLayoutTag_UseChannelBitmap:
-                // This is the best case. CoreAudio's representation of the
-                // layout is the same of what mpv uses internally.
-                ca_msg(MSGL_WARN, "channel layout !\n");
-                bitmaps[n_bitmaps++] = layouts[i].mChannelBitmap;
-            case kAudioChannelLayoutTag_UseChannelDescriptions: {
-                // If the channel layout uses channel descriptions, from my
-                // exepriments there are there three possibile cases:
-                // * The description has a label kAudioChannelLabel_Unknown:
-                //   Can't do anything about this (looks like non surround
-                //   layouts are like this).
-                // * The description uses positional information: this in
-                //   theory could be used but one would have to map spatial
-                //   positions to labels which is not really feasible.
-                // * The description has a well known label which can be mapped
-                //   to the waveextensible definition: this is the kind of
-                //   descriptions we process here.
-                ca_msg(MSGL_WARN, "descriptions!\n");
-                size_t ch_num = layouts[i].mNumberChannelDescriptions;
+                case kAudioChannelLayoutTag_UseChannelBitmap:
+                    bitmaps[n_bitmaps++] = layouts[i].mChannelBitmap;
+                    break;
 
-                uint32_t bitmap = 0;
-                bool all_channels_valid = true;
+                case kAudioChannelLayoutTag_UseChannelDescriptions:
+                    if (ca_bitmap_from_ch_descriptions(layouts[i], &bitmap))
+                        bitmaps[n_bitmaps++] = bitmap;
+                    break;
 
-                for (int j=0; j < ch_num && all_channels_valid; j++) {
-                    AudioChannelLabel label =
-                        layouts[i].mChannelDescriptions[j].mChannelLabel;
-
-                    if (label == kAudioChannelLabel_UseCoordinates ||
-                        label == kAudioChannelLabel_Unknown ||
-                        label > kAudioChannelLabel_TopBackRight) {
-                        ca_msg(MSGL_WARN,
-                                "channel label=%d unusable to build channel "
-                                "bitmap, skipping layout\n", label);
-                        all_channels_valid = false;
-                    } else {
-                        bitmap |= 1ULL << (label - 1);
-                    }
-                }
-
-                if (all_channels_valid)
-                    bitmaps[n_bitmaps++] = bitmap;
-
-                break;
+                default:
+                    if (ca_bitmap_from_ch_tag(layouts[i], &bitmap))
+                        bitmaps[n_bitmaps++] = bitmap;
             }
-            default: {
-                ca_msg(MSGL_WARN, "some tag!\n");
-                // This layout is defined exclusively by it's tag. Use the Audio
-                // Format Services API to try and convert it to a bitmap that
-                // mpv can use.
-                uint32_t bitmap;
-                uint32_t bitmap_size = sizeof(uint32_t);
-                AudioChannelLayoutTag tag = layouts[i].mChannelLayoutTag;
-                err = AudioFormatGetProperty(
-                    kAudioFormatProperty_BitmapForLayoutTag,
-                    sizeof(AudioChannelLayoutTag), &tag,
-                    &bitmap_size, &bitmap);
-                if (err != noErr) {
-                    ca_msg(MSGL_WARN,
-                            "channel layout tag=%d unusable to build channel "
-                            "bitmap, skipping layout\n", tag);
-                } else {
-                    bitmaps[n_bitmaps++] = bitmap;
-                }
-            }
-            }
-        } // closes for
+        }
+
+        free(layouts);
 
         struct mp_chmap_sel chmap_sel = {0};
 
@@ -419,7 +369,6 @@ static int init(struct ao *ao, char *params)
         if (!ao_chmap_sel_adjust(ao, &chmap_sel, &ao->channels))
             goto coreaudio_error;
 
-        free(layouts);
     } // closes if (!supports_digital)
 
     // Build ASBD for the input format
