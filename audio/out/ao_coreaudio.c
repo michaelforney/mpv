@@ -108,7 +108,7 @@ static OSStatus render_cb_lpcm(void *ctx, AudioUnitRenderActionFlags *aflags,
     return noErr;
 }
 
-static OSStatus render_cis_digital(
+static OSStatus render_cb_digital(
         AudioDeviceID device, const AudioTimeStamp *ts,
         const void *in_data, const AudioTimeStamp *in_ts,
         AudioBufferList *out_data, const AudioTimeStamp *out_ts, void *ctx)
@@ -664,7 +664,7 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     print_buffer(p->buffer);
 
     err = AudioDeviceCreateIOProcID(p->device,
-                                    (AudioDeviceIOProc)render_cis_digital,
+                                    (AudioDeviceIOProc)render_cb_digital,
                                     (void *)ao,
                                     &d->render_cb);
 
