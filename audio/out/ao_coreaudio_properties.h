@@ -21,10 +21,21 @@
 
 #include <AudioToolbox/AudioToolbox.h>
 
-OSStatus ca_get(AudioObjectID id, AudioObjectPropertySelector selector,
+// CoreaAudio names are way too verbose
+
+#define ca_sel    AudioObjectPropertySelector
+#define ca_scope  AudioObjectPropertyScope
+#define CA_GLOBAL kAudioObjectPropertyScopeGlobal
+#define CA_OUTPUT kAudioObjectPropertyScopeOutut
+
+OSStatus ca_get(AudioObjectID id, ca_scope scope, ca_sel selector,
                 uint32_t size, void *data);
 
-#define CA_GET(id, selector, data) ca_get(id, selector, sizeof(*(data)), data)
+OSStatus ca_set(AudioObjectID id, ca_scope scope, ca_sel selector,
+                uint32_t size, void *data);
+
+#define CA_GET(id, sel, data) ca_get(id, CA_GLOBAL, sel, sizeof(*(data)), data)
+#define CA_SET(id, sel, data) ca_set(id, CA_GLOBAL, sel, sizeof(*(data)), data)
 
 uint32_t GetAudioPropertyArray(AudioObjectID id,
                                AudioObjectPropertySelector selector,
@@ -37,10 +48,6 @@ uint32_t GetGlobalAudioPropertyArray(AudioObjectID id,
 OSStatus GetAudioPropertyString(AudioObjectID id,
                                 AudioObjectPropertySelector selector,
                                 char **data);
-
-OSStatus SetAudioProperty(AudioObjectID id,
-                          AudioObjectPropertySelector selector,
-                          uint32_t size, void *data);
 
 Boolean IsAudioPropertySettable(AudioObjectID id,
                                 AudioObjectPropertySelector selector,
