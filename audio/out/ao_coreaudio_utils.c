@@ -215,8 +215,8 @@ static OSStatus ca_change_mixing(AudioDeviceID device, uint32_t val,
     if (AudioObjectHasProperty(device, &p_addr)) {
         OSStatus err;
         Boolean writeable = 0;
-        err = IsAudioPropertySettable(device, kAudioDevicePropertySupportsMixing,
-                                      &writeable);
+        err = CA_SETTABLE(device, kAudioDevicePropertySupportsMixing,
+                          &writeable);
 
         if (!CHECK_CA_WARN("can't tell if mixing property is settable")) {
             return err;

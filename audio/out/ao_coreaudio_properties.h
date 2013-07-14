@@ -50,8 +50,9 @@ OSStatus ca_get_str(AudioObjectID id, ca_scope scope,ca_sel selector,
 
 #define CA_GET_STR(id, sel, data) ca_get_str(id, CA_GLOBAL, sel, data)
 
-Boolean IsAudioPropertySettable(AudioObjectID id,
-                                AudioObjectPropertySelector selector,
-                                Boolean *outData);
+Boolean ca_settable(AudioObjectID id, ca_scope scope, ca_sel selector,
+                    Boolean *data);
+
+#define CA_SETTABLE(id, sel, data) ca_settable(id, CA_GLOBAL, sel, data)
 
 #endif /* MPV_COREAUDIO_PROPERTIES_H */
