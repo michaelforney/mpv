@@ -62,10 +62,12 @@ OSStatus ca_get_ary(AudioObjectID id, ca_scope scope, ca_sel selector,
     CHECK_CA_ERROR("can't fetch property size");
 
     *data = malloc(p_size);
+    *elements = p_size / element_size;
 
     err = ca_get(id, scope, selector, p_size, *data);
     CHECK_CA_ERROR_L(coreaudio_error_free, "can't fetch property data");
 
+    return err;
 coreaudio_error_free:
     free(*data);
 coreaudio_error:
