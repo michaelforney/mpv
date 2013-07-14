@@ -342,6 +342,32 @@ bool ca_change_format(AudioStreamID stream,
     return format_set;
 }
 
+void ca_bitmaps_from_layouts(AudioChannelLayout *layouts, size_t n_layouts,
+                             uint32_t **bitmaps, size_t *n_bitmaps)
+{
+    *n_bitmaps = 0;
+    *bitmaps = malloc(sizeof(uint32_t) * n_layouts);
+
+    for (int i=0; i < n_layouts; i++) {
+        uint32_t bitmap = 0;
+
+        switch (layouts[i].mChannelLayoutTag) {
+        case kAudioChannelLayoutTag_UseChannelBitmap:
+            (*bitmaps)[*n_bitmaps] = layouts[i].mChannelBitmap;
+            break;
+
+        case kAudioChannelLayoutTag_UseChannelDescriptions:
+            if (ca_bitmap_from_ch_desc(layouts[i], &bitmap))
+                (*bitmaps)[*n_bitmaps] = bitmap;
+            break;
+
+        default:
+            if (ca_bitmap_from_ch_tag(layouts[i], &bitmap))
+                (*bitmaps)[*n_bitmaps] = bitmap;
+        }
+    }
+}
+
 bool ca_bitmap_from_ch_desc(AudioChannelLayout layout, uint32_t *bitmap)
 {
     // If the channel layout uses channel descriptions, from my

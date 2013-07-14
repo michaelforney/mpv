@@ -314,28 +314,10 @@ static int init(struct ao *ao, char *params)
                            &layouts, &n_layouts);
         CHECK_CA_ERROR("could not get audio device prefered layouts");
 
-        uint32_t bitmaps[n_layouts];
-        size_t   n_bitmaps = 0;
+        uint32_t *bitmaps;
+        size_t   n_bitmaps;
 
-        for (int i=0; i < n_layouts; i++) {
-            uint32_t bitmap = 0;
-
-            switch (layouts[i].mChannelLayoutTag) {
-                case kAudioChannelLayoutTag_UseChannelBitmap:
-                    bitmaps[n_bitmaps++] = layouts[i].mChannelBitmap;
-                    break;
-
-                case kAudioChannelLayoutTag_UseChannelDescriptions:
-                    if (ca_bitmap_from_ch_desc(layouts[i], &bitmap))
-                        bitmaps[n_bitmaps++] = bitmap;
-                    break;
-
-                default:
-                    if (ca_bitmap_from_ch_tag(layouts[i], &bitmap))
-                        bitmaps[n_bitmaps++] = bitmap;
-            }
-        }
-
+        ca_bitmaps_from_layouts(layouts, n_layouts, &bitmaps, &n_bitmaps);
         free(layouts);
 
         struct mp_chmap_sel chmap_sel = {0};
