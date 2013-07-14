@@ -93,15 +93,14 @@ coreaudio_error:
     return err;
 }
 
-Boolean IsAudioPropertySettable(AudioObjectID id,
-                                AudioObjectPropertySelector selector,
-                                Boolean *data)
+Boolean ca_settable(AudioObjectID id, ca_scope scope, ca_sel selector,
+                    Boolean *data)
 {
-    AudioObjectPropertyAddress p_addr;
-
-    p_addr.mSelector = selector;
-    p_addr.mScope    = kAudioObjectPropertyScopeGlobal;
-    p_addr.mElement  = kAudioObjectPropertyElementMaster;
+    AudioObjectPropertyAddress p_addr = (AudioObjectPropertyAddress) {
+        .mSelector = selector,
+        .mScope    = kAudioObjectPropertyScopeGlobal,
+        .mElement  = kAudioObjectPropertyElementMaster,
+    };
 
     return AudioObjectIsPropertySettable(id, &p_addr, data);
 }
