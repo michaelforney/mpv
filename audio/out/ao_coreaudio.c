@@ -329,6 +329,8 @@ static int init(struct ao *ao, char *params)
             mp_chmap_sel_add_map(&chmap_sel, &chmap);
         }
 
+        talloc_free(bitmaps);
+
         if (ao->channels.num < 3 || n_bitmaps < 1)
             // If the input is not surround or we could not get any usable
             // bitmap from the hardware, default to waveext...

@@ -346,7 +346,7 @@ void ca_bitmaps_from_layouts(AudioChannelLayout *layouts, size_t n_layouts,
                              uint32_t **bitmaps, size_t *n_bitmaps)
 {
     *n_bitmaps = 0;
-    *bitmaps = malloc(sizeof(uint32_t) * n_layouts);
+    *bitmaps = talloc_array_size(NULL, sizeof(uint32_t), n_layouts);
 
     for (int i=0; i < n_layouts; i++) {
         uint32_t bitmap = 0;
@@ -357,18 +357,18 @@ void ca_bitmaps_from_layouts(AudioChannelLayout *layouts, size_t n_layouts,
             break;
 
         case kAudioChannelLayoutTag_UseChannelDescriptions:
-            if (ca_bitmap_from_ch_desc(layouts[i], &bitmap))
+            if (!ca_bitmap_from_ch_desc(&layouts[i], &bitmap))
                 (*bitmaps)[(*n_bitmaps)++] = bitmap;
             break;
 
         default:
-            if (ca_bitmap_from_ch_tag(layouts[i], &bitmap))
+            if (ca_bitmap_from_ch_tag(&layouts[i], &bitmap))
                 (*bitmaps)[(*n_bitmaps)++] = bitmap;
         }
     }
 }
 
-bool ca_bitmap_from_ch_desc(AudioChannelLayout layout, uint32_t *bitmap)
+bool ca_bitmap_from_ch_desc(AudioChannelLayout *layout, uint32_t *bitmap)
 {
     // If the channel layout uses channel descriptions, from my
     // exepriments there are there three possibile cases:
@@ -381,11 +381,11 @@ bool ca_bitmap_from_ch_desc(AudioChannelLayout layout, uint32_t *bitmap)
     // * The description has a well known label which can be mapped
     //   to the waveextensible definition: this is the kind of
     //   descriptions we process here.
-    size_t ch_num = layout.mNumberChannelDescriptions;
+    size_t ch_num = layout->mNumberChannelDescriptions;
     bool all_channels_valid = true;
 
     for (int j=0; j < ch_num && all_channels_valid; j++) {
-        AudioChannelLabel label = layout.mChannelDescriptions[j].mChannelLabel;
+        AudioChannelLabel label = layout->mChannelDescriptions[j].mChannelLabel;
         if (label == kAudioChannelLabel_UseCoordinates ||
             label == kAudioChannelLabel_Unknown ||
             label > kAudioChannelLabel_TopBackRight) {
@@ -401,14 +401,14 @@ bool ca_bitmap_from_ch_desc(AudioChannelLayout layout, uint32_t *bitmap)
     return all_channels_valid;
 }
 
-bool ca_bitmap_from_ch_tag(AudioChannelLayout layout, uint32_t *bitmap)
+bool ca_bitmap_from_ch_tag(AudioChannelLayout *layout, uint32_t *bitmap)
 {
     // This layout is defined exclusively by it's tag. Use the Audio
     // Format Services API to try and convert it to a bitmap that
     // mpv can use.
     uint32_t bitmap_size = sizeof(uint32_t);
 
-    AudioChannelLayoutTag tag = layout.mChannelLayoutTag;
+    AudioChannelLayoutTag tag = layout->mChannelLayoutTag;
     OSStatus err = AudioFormatGetProperty(
         kAudioFormatProperty_BitmapForLayoutTag,
         sizeof(AudioChannelLayoutTag), &tag,
