@@ -353,17 +353,17 @@ void ca_bitmaps_from_layouts(AudioChannelLayout *layouts, size_t n_layouts,
 
         switch (layouts[i].mChannelLayoutTag) {
         case kAudioChannelLayoutTag_UseChannelBitmap:
-            (*bitmaps)[*n_bitmaps] = layouts[i].mChannelBitmap;
+            (*bitmaps)[(*n_bitmaps)++] = layouts[i].mChannelBitmap;
             break;
 
         case kAudioChannelLayoutTag_UseChannelDescriptions:
             if (ca_bitmap_from_ch_desc(layouts[i], &bitmap))
-                (*bitmaps)[*n_bitmaps] = bitmap;
+                (*bitmaps)[(*n_bitmaps)++] = bitmap;
             break;
 
         default:
             if (ca_bitmap_from_ch_tag(layouts[i], &bitmap))
-                (*bitmaps)[*n_bitmaps] = bitmap;
+                (*bitmaps)[(*n_bitmaps)++] = bitmap;
         }
     }
 }
