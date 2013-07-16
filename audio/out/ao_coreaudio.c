@@ -555,10 +555,11 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     err = ca_enable_device_listener(p->device, changed);
     CHECK_CA_ERROR("cannot install format change listener during init");
 
+    ao->format &= ~AF_FORMAT_END_MASK;
     if (d->stream_asbd.mFormatID & kAudioFormatFlagIsBigEndian)
-        ao->format = AF_FORMAT_AC3_BE;
+        ao->format |= AF_FORMAT_BE;
     else
-        ao->format = AF_FORMAT_AC3_LE;
+        ao->format |= AF_FORMAT_LE;
 
     ao->samplerate = d->stream_asbd.mSampleRate;
     ao->bps = ao->samplerate *
