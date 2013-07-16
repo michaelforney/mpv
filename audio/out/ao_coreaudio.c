@@ -474,6 +474,7 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
     if (!is_alive)
         ca_msg(MSGL_WARN, "device is not alive\n");
 
+    d->stream_asbd = asbd;
     p->is_digital = 1;
 
     err = ca_lock_device(p->device, &d->hog_pid);
@@ -533,7 +534,7 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
 
             if (req_rate_format >= 0)
                 d->stream_asbd = formats[req_rate_format].mFormat;
-            else
+            else if (max_rate_format >= 0)
                 d->stream_asbd = formats[max_rate_format].mFormat;
 
             talloc_free(formats);
