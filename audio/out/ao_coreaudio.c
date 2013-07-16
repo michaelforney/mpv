@@ -70,11 +70,11 @@ struct priv_d {
 
     // format we changed the stream to: for the digital case each application
     // sets the stream format for a device to what it needs
-    AudioStreamBasicDescription stream_asdb;
+    AudioStreamBasicDescription stream_asbd;
     AudioStreamBasicDescription original_asbd;
 
     bool changed_mixing;
-    int stream_asdb_changed;
+    int stream_asbd_changed;
     bool muted;
 };
 
@@ -263,7 +263,7 @@ static int init(struct ao *ao, char *params)
     struct priv_d *d= talloc_zero(p, struct priv_d);
     *d = (struct priv_d) {
         .muted = false,
-        .stream_asdb_changed = 0,
+        .stream_asbd_changed = 0,
         .hog_pid = -1,
         .stream = 0,
         .stream_idx = -1,
@@ -532,9 +532,9 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
                 }
 
             if (req_rate_format >= 0)
-                d->stream_asdb = formats[req_rate_format].mFormat;
+                d->stream_asbd = formats[req_rate_format].mFormat;
             else
-                d->stream_asdb = formats[max_rate_format].mFormat;
+                d->stream_asbd = formats[max_rate_format].mFormat;
 
             talloc_free(formats);
         }
@@ -547,23 +547,23 @@ static int init_digital(struct ao *ao, AudioStreamBasicDescription asbd)
         goto coreaudio_error;
     }
 
-    if (!ca_change_format(d->stream, d->stream_asdb))
+    if (!ca_change_format(d->stream, d->stream_asbd))
         goto coreaudio_error;
 
-    void *changed = (void *) &(d->stream_asdb_changed);
+    void *changed = (void *) &(d->stream_asbd_changed);
     err = ca_enable_device_listener(p->device, changed);
     CHECK_CA_ERROR("cannot install format change listener during init");
 
     ao->format &= ~AF_FORMAT_END_MASK;
-    if (d->stream_asdb.mFormatID & kAudioFormatFlagIsBigEndian)
+    if (d->stream_asbd.mFormatID & kAudioFormatFlagIsBigEndian)
         ao->format |= AF_FORMAT_BE;
     else
         ao->format |= AF_FORMAT_LE;
 
-    ao->samplerate = d->stream_asdb.mSampleRate;
+    ao->samplerate = d->stream_asbd.mSampleRate;
     ao->bps = ao->samplerate *
-                  (d->stream_asdb.mBytesPerPacket /
-                   d->stream_asdb.mFramesPerPacket);
+                  (d->stream_asbd.mBytesPerPacket /
+                   d->stream_asbd.mFramesPerPacket);
 
     p->buffer = mp_ring_new(p, get_ring_size(ao));
     print_buffer(p->buffer);
@@ -591,10 +591,10 @@ static int play(struct ao *ao, void *output_samples, int num_bytes, int flags)
     struct priv_d *d = p->digital;
 
     // Check whether we need to reset the digital output stream.
-    if (p->is_digital && d->stream_asdb_changed) {
-        d->stream_asdb_changed = 0;
+    if (p->is_digital && d->stream_asbd_changed) {
+        d->stream_asbd_changed = 0;
         if (ca_stream_supports_digital(d->stream)) {
-            if (!ca_change_format(d->stream, d->stream_asdb)) {
+            if (!ca_change_format(d->stream, d->stream_asbd)) {
                 ca_msg(MSGL_WARN, "can't restore digital output\n");
             } else {
                 ca_msg(MSGL_WARN, "restoring digital output succeeded.\n");
@@ -645,7 +645,7 @@ static void uninit(struct ao *ao, bool immed)
     } else {
         struct priv_d *d = p->digital;
 
-        void *changed = (void *) &(d->stream_asdb_changed);
+        void *changed = (void *) &(d->stream_asbd_changed);
         err = ca_disable_device_listener(p->device, changed);
         CHECK_CA_WARN("can't remove device listener, this may cause a crash");
 
