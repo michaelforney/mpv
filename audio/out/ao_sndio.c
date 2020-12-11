@@ -38,7 +38,7 @@ struct priv {
     /* mutex for priv.hdl */
     pthread_mutex_t lock;
     /* data control */
-    void *buffer;
+    unsigned char *buffer;
     int delay;
     /* volume control */
     int vol;
@@ -129,8 +129,8 @@ static int init(struct ao *ao)
 
     /* support audio device defined in the command line */
     const char *dev_name = ao->device ? ao->device : SIO_DEVANY;
-    /* use blocking mode */
-    p->hdl = sio_open(dev_name, SIO_PLAY, 0);
+    /* use non-blocking mode */
+    p->hdl = sio_open(dev_name, SIO_PLAY, 1);
     if (p->hdl == NULL) {
         MP_ERR(ao, "can't open sndio device '%s'\n", dev_name);
         goto error;
@@ -247,7 +247,8 @@ static void *audio_write(void *arg)
 {
     struct ao *ao = arg;
     struct priv *p = ao->priv;
-    void *data[1] = {p->buffer};
+    unsigned char *buffer;
+    size_t pending;
 
     /* allow the thread to be canceled inside the poll() call */
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -255,6 +256,8 @@ static void *audio_write(void *arg)
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
     pthread_mutex_lock(&p->lock);
 
+    pending = 0;
+    buffer = p->buffer;
     for (;;) {
         int n;
         bool should_continue = false, should_return = false;
@@ -279,26 +282,35 @@ static void *audio_write(void *arg)
         pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
         pthread_mutex_lock(&p->lock);
 
-        if (should_continue)
+        if (should_continue || !(sio_revents(p->hdl, p->pfd) & POLLOUT))
             continue;
 
-        if (sio_revents(p->hdl, p->pfd) & POLLOUT) {
-            /* write the most possible while guaranteeing little to no blocking,
-             * using a multiple of block size */
-            int to_write = ((p->par.bufsz - p->delay) / p->par.round) * p->par.round;
+        if (pending < p->par.round) {
+            if (buffer > p->buffer) {
+                if (pending > 0)
+                    memmove(p->buffer, buffer, pending * ao->sstride);
+                buffer = p->buffer;
+            }
+            void *data[1] = {buffer};
+            /* read enough samples (at least one block, since the handle is
+             * ready for writing) to maintain a full buffer */
+            int to_read = MPMAX((p->par.bufsz - p->delay) / p->par.round, 1) * p->par.round - pending;
+            pending += to_read;
             /* time until buffer is heard is: (<current sample delay> + <new samples>) / <sample rate> */
             /* ao_read_data inserts silence when necessary; checking its return value isn't required */
-            ao_read_data(ao, data, to_write, mp_time_us() + ((p->delay + to_write) * 1000000LL) / p->par.rate);
-
-            if (sio_write(p->hdl, p->buffer, to_write * ao->sstride) != (to_write * ao->sstride)) {
-                /* fatal error, unlock mutex before exiting */
-                pthread_mutex_unlock(&p->lock);
-                MP_FATAL(ao, "unexpected error while writing\n");
-                return NULL;
-            }
-
-            p->delay += to_write;
+            ao_read_data(ao, data, to_read, mp_time_us() + (pending + p->delay) * 1000000LL / p->par.rate);
         }
+
+        size_t len = sio_write(p->hdl, buffer, pending * ao->sstride);
+        if (len == 0 && sio_eof(p->hdl) != 0) {
+            MP_ERR(ao, "unexpected error while writing\n");
+            /* fatal error, unlock mutex before exiting */
+            pthread_mutex_unlock(&p->lock);
+            return NULL;
+        }
+        buffer += len;
+        pending -= len / ao->sstride;
+        p->delay += len / ao->sstride;
     }
 
     return NULL;
